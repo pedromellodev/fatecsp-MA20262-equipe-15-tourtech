@@ -1,0 +1,169 @@
+// =====================================================================
+// TourTech — Equipe 15
+// FATEC-SP • Microinformática Aplicada (ILP590) • 2º semestre de 2026
+// Etapa 3 — Power Pivot & DAX
+//
+// Arquivo : dax/medidas_preliminares.dax
+// Modelo  : TourTech_03_PowerPivot.xlsx
+// Fato    : fTurismo
+// Dimensões: dLocalidade, dHospedagem, dEventos, dAvaliacao, dCalendario
+// Auditoria: Rejeitados
+//
+// Conteúdo (17 medidas):
+//   1. Medidas principais ................... 8
+//   2. Conferência de volume de linhas ...... 3
+//   3. Conferência de integridade referencial 5
+//   4. Conferência de chaves primárias ...... 1
+// =====================================================================
+
+
+// =====================================================================
+// 1. MEDIDAS PRINCIPAIS
+// =====================================================================
+
+// Quantos visitantes foram registrados no contexto de filtro atual?
+Total de Visitantes :=
+SUM ( fTurismo[Quantidade_de_Visitantes] )
+
+
+// Quantas pessoas ocuparam as hospedagens no contexto de filtro atual?
+Total de Ocupantes :=
+SUM ( fTurismo[Quantidade_de_Ocupantes] )
+
+
+// Qual é a capacidade total disponível no contexto de filtro atual?
+Capacidade Disponível :=
+SUM ( fTurismo[Capacidade_Disponivel] )
+
+
+// Quantas avaliações foram registradas no contexto de filtro atual?
+Total de Avaliações :=
+SUM ( fTurismo[Quantidade_de_Avaliacoes] )
+
+
+// Quantos registros distintos da tabela fato existem no contexto atual?
+Quantidade de Registros :=
+DISTINCTCOUNT ( fTurismo[ID_Registro] )
+
+
+// Em média, quantos visitantes há por registro da fato?
+Visitantes por Registro :=
+DIVIDE ( [Total de Visitantes]; [Quantidade de Registros] )
+
+
+// Qual é a taxa de ocupação agregada?
+// Calculada como razão entre totais (ocupantes ÷ capacidade), e não como
+// média das taxas de cada linha.
+Taxa de Ocupação :=
+DIVIDE ( [Total de Ocupantes]; [Capacidade Disponível] )
+
+
+// Qual é a nota média das avaliações, ponderada pela quantidade de
+// avaliações de cada linha da fato?
+// A nota vem da dimensão dAvaliacao (via RELATED) e é multiplicada por
+// Quantidade_de_Avaliacoes antes de ser dividida pelo total de avaliações.
+Nota Média Ponderada :=
+DIVIDE (
+    SUMX (
+        fTurismo;
+        RELATED ( dAvaliacao[Nota] )
+            * fTurismo[Quantidade_de_Avaliacoes]
+    );
+    [Total de Avaliações]
+)
+
+
+// =====================================================================
+// 2. CONFERÊNCIA — VOLUME DE LINHAS
+// =====================================================================
+
+// Quantas linhas a tabela fato possui?
+Conf Linhas Fato :=
+COUNTROWS ( fTurismo )
+
+
+// Quantas linhas foram rejeitadas pelas regras de tratamento da Etapa 2?
+Conf Linhas Rejeitados :=
+COUNTROWS ( Rejeitados )
+
+
+// Quantas linhas foram classificadas no total (aceitas + rejeitadas)?
+// Base para a reconciliação com a Etapa 2.
+Conf Linhas Classificadas :=
+[Conf Linhas Fato] + [Conf Linhas Rejeitados]
+
+
+// =====================================================================
+// 3. CONFERÊNCIA — INTEGRIDADE REFERENCIAL (FK ÓRFÃ)
+//    Resultado esperado: 0 em todas as medidas desta seção.
+// =====================================================================
+
+// Quantas linhas da fato não possuem localidade correspondente em dLocalidade?
+Conf Fato sem Localidade :=
+COUNTROWS (
+    FILTER (
+        fTurismo;
+        ISBLANK ( RELATED ( dLocalidade[Destino] ) )
+    )
+) + 0
+
+
+// Quantas linhas da fato não possuem hospedagem correspondente em dHospedagem?
+Conf Fato sem Hospedagem :=
+COUNTROWS (
+    FILTER (
+        fTurismo;
+        ISBLANK ( RELATED ( dHospedagem[Tipo_de_Hospedagem] ) )
+    )
+) + 0
+
+
+// Quantas linhas da fato não possuem evento correspondente em dEventos?
+Conf Fato sem Evento :=
+COUNTROWS (
+    FILTER (
+        fTurismo;
+        ISBLANK ( RELATED ( dEventos[Nome] ) )
+    )
+) + 0
+
+
+// Quantas linhas da fato não possuem avaliação correspondente em dAvaliacao?
+Conf Fato sem Avaliacao :=
+COUNTROWS (
+    FILTER (
+        fTurismo;
+        ISBLANK ( RELATED ( dAvaliacao[Nota] ) )
+    )
+) + 0
+
+
+// Quantas linhas da fato não possuem data correspondente em dCalendario?
+Conf Fato sem Data :=
+COUNTROWS (
+    FILTER (
+        fTurismo;
+        ISBLANK ( RELATED ( dCalendario[Data] ) )
+    )
+) + 0
+
+
+// =====================================================================
+// 4. CONFERÊNCIA — CHAVES PRIMÁRIAS DAS DIMENSÕES
+//    Resultado esperado: 0.
+// =====================================================================
+
+// Alguma chave primária das cinco dimensões está duplicada?
+// Para cada dimensão: número de linhas − número de valores distintos da PK.
+// A soma só é zero se nenhuma das PKs tiver duplicidade.
+Conf PK Duplicada :=
+COUNTROWS ( dLocalidade )
+    - DISTINCTCOUNT ( dLocalidade[ID_Localidade] )
+    + COUNTROWS ( dHospedagem )
+    - DISTINCTCOUNT ( dHospedagem[ID_Hospedagem] )
+    + COUNTROWS ( dEventos )
+    - DISTINCTCOUNT ( dEventos[ID_Evento] )
+    + COUNTROWS ( dAvaliacao )
+    - DISTINCTCOUNT ( dAvaliacao[ID_Avaliacao] )
+    + COUNTROWS ( dCalendario )
+    - DISTINCTCOUNT ( dCalendario[Data] )
